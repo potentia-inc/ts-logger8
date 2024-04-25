@@ -1,9 +1,12 @@
+import debug from 'debug'
 import build from 'pino-abstract-transport'
 
 type Options = {
   link: string
   timeout?: number
 }
+
+const log = debug('logger:gchat')
 
 export default async function (
   options: Options,
@@ -13,16 +16,22 @@ export default async function (
     for await (const obj of source) {
       const { level, time, name, msg, ...misc } = obj
       const date = new Date(time as number).toISOString()
-      const body = [
+      const text = [
         `[${date}] ${s(name)} *${s(level)}* ${s(msg)}`,
         JSON.stringify(misc),
       ].join('\n')
       fetch(link, {
         method: 'POST',
-        headers: { 'content-type': 'application/ajax' },
+        headers: { 'content-type': 'application/json' },
         signal: AbortSignal.timeout(timeout),
-        body,
-      }).catch(console.error)
+        body: JSON.stringify({ text }),
+      })
+        .then((res) => Promise.all([res, res.text()]))
+        .then(([res, text]) => {
+          log(res.status, text)
+          if (!res.ok) throw new Error(text)
+        })
+        .catch(console.error)
     }
   })
 
